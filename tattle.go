@@ -3,38 +3,68 @@
 // MIT license that can be found in the LICENSE file.
 
 /*
-Package tattle provides a simple facility to attach an error to the
-structure that caused it.
+# Motivation
 
-# High level summary
+Go has great error handling. Paying attention to the errors can be a
+challenge. This package helps you pay attention to the errors without
+changing or extending the error concept.
 
-What tattle does could  be done using error values:
+A Tattler is a lightweight object that records, or Latches, the first error
+it is given. Tattler defines a mechanism to log the error, including the
+source code location where the error was latched.
 
-	type Record struct {
-	    <record contents>
-	    err error
-	}
+Tattlers aren't pretty, but they can save you a lot of debugging time:
 
-Tattlers add the source code location of the error, and a logging
-capability.
+ 1. Include a Tattler variable, which I usually call 'tat', in types
+    (structures) that have complicated methods.
+ 2. Defer a Tattle Log() call in every method, so errors get logged in close
+    proximity to their occurrence.
+ 3. Latch errors in the methods to the tat.
+ 4. If the tat latches with an unexpected error (n.b., most of them), treat
+    the enclosing structure instance as tainted and stop doing anything with
+    it. Simply return if called with the tat latched.
 
-	type tattler tattle.Tattler // if you like
-	...
-	type Record struct {
-	   <record contents>
-	   tat tattler
-	}
+An example of the above follows this introduction.
 
-Prior to an error, a tattler is a nil pointer to a concrete structure - so
-it is smaller than even a nil error, out of sensitivity to applications that
-have extraordinary object counts.
+In the debugging phase, one look at the log, plus knowledge of recent
+changes, is enough to trigger that "oh shoot" moment when you realize what
+you must do to address the error. Later, after you've forgotten what the
+code does, a Tattler latch is still useful but it's far less satisfying.
 
-The tattler's Latch method, tat.Latch(<error>), allocates a bit of memory to
-store the error and its source code latch location.  Only the first non-nil
-error is latched; subsequent different non-nil errors are counted but discarded.
+A secondary use of a tat is to monitor a complicated sequence that is broken
+into sub-functions, where an error doesn't call into question any particular
+structure. In this case it may make sense to use a tat variable as a local
+variable, and pass a pointer to it to the subfunctions, each of which should
+defer a tat Log() call. and latch errors to the tat.  This is helpful but
+less common scenario.
 
-A tattler doesn't implement the error interface. Tattlers are a mousetrap,
-not a mouse.  The latched error is available through method Le().
+Full disclosure, tattlers aren't good for dealing with end-user errors.
+End-user errors generally aren't inter-related so there is no benefit to
+catching the first one.
+
+Here is a tattler log message from an example included for the Tattler Logf
+function. The messages will be considerably shorter for local packages :-) :
+
+	2024/02/18 15:50:30 tr record 15:name size 8192 exceeds max 1000
+	 Latched at:  exampleLogf_test.go:49 in github.com/rsnorthscope/tattle.ExampleTattler_Logf.func2
+	 Called From: exampleLogf_test.go:35 in github.com/rsnorthscope/tattle.ExampleTattler_Logf.func1
+	 Called From: exampleLogf_test.go:65 in github.com/rsnorthscope/tattle.ExampleTattler_Logf
+
+# Implementation
+
+Prior to an error, a tattler is a nil pointer to a concrete type known as
+the tale.
+
+When the Latch methods are given an error to latch, they allocate the tale
+to store the error and 3 frames from the stack.  Only the first non-nil
+error is latched; subsequent different non-nil errors are counted but the
+error value is discarded.
+
+The log functions are low cost in the non-error case.  The printf-style
+string in a Logf isn't expanded unless there is an error.
+
+A tattler doesn't implement the error interface. I tried it and decided it
+was a mistake.
 
 # Concurrency
 
@@ -44,12 +74,11 @@ the structures also protect the tattlers.
 
 Lacking a use case, I haven't defined a "SerialTattler" type.
 
-# Advice
+# Final Thoughts
 
-  - It's commonplace to return an error from a tat, which the caller then
-    latches into the same tat.  This is normal; the first latch wins.
-  - The most-used methods are Latch(), Latchf(), Le(), and Log().
-  - A deferred Log() is your friend.
+  - If you have a Tattler, latch (almost) every error.
+  - FWIW the most-used methods are Latch(), Latchf(), Le(), and Logf().
+  - A deferred Log()/Logf() is your friend.
 */
 package tattle
 
@@ -61,7 +90,7 @@ import (
 	"strings"
 )
 
-// A Tattler is used to record an error value within a structure.
+// A Tattler is used to record an error in a structure or within a call flow.
 type Tattler struct {
 	talep *tale
 }
@@ -74,6 +103,9 @@ type tale struct {
 	missed  int
 }
 
+// fullLatch contains the latch logic.
+// parameter b is the difference in frames
+// between Latch and fulLatch, normally 1.
 func (tat *Tattler) fullLatch(b int, e error) bool {
 	if e != nil {
 		if tat.talep == nil {
@@ -154,9 +186,10 @@ func (tat *Tattler) Led() bool { return tat.talep != nil }
 // Log logs a latched error.  Log is a no-op if the tattler is not latched,
 // or if the error was previously logged.
 //
-// Typically the call to Logf is deferred at the beginning of a method, so that
-// it will log any error that occurs during the method.  For example for a type
-// Record with embedded mutex mux and tattler tat, you might write:
+// Typically the call to Logf is deferred at the beginning of a method, so
+// that it will log any error that occurs during the method.  For example
+// for a type Record with embedded mutex mux and tattler tat, you might
+// write:
 //
 //	func (p *Record) Method() {
 //	     p.mux.Lock()         // common. Locks record,
@@ -166,8 +199,9 @@ func (tat *Tattler) Led() bool { return tat.talep != nil }
 //	     <body of Method() with various Latch() cases>
 //	}
 //
-// Each Tattler instance is only logged once.  The encapsulated error
-// may be logged again if it is extracted and latched into another Tattler instance.
+// Each Tattler instance is only logged once.  The encapsulated error may be
+// logged again if it is extracted and latched into a different Tattler
+// instance.
 func (tat *Tattler) Log() {
 	tat.Logf("")
 }
