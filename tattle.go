@@ -1,4 +1,6 @@
 // Copyright 2019-2024 Richard Northscope.  All rights reserved.
+// Use of this source code is governed by the
+// MIT license that can be found in the LICENSE file.
 
 /*
 Package tattle provides a simple facility to attach an error to the
@@ -29,33 +31,25 @@ have extraordinary object counts.
 
 The tattler's Latch method, tat.Latch(<error>), allocates a bit of memory to
 store the error and its source code latch location.  Only the first non-nil
-error is latched; subsequent non-nil errors are counted but discarded.
+error is latched; subsequent different non-nil errors are counted but discarded.
 
 A tattler doesn't implement the error interface. Tattlers are a mousetrap,
-not a mouse.  The latched error is available through method Le(). So,
-tat.Le().  Yeah, it's a coding pun.
-
-# Experience
-
-Tattlers are in use in a developing database / http server project.
-Currently at 14K lines of go code, the project defines 59
-tattlers, with 183 Latch cases. The vast majority of Latch cases detect
-programmatic, not end-user, errors. The tattlers are helpful.
+not a mouse.  The latched error is available through method Le().
 
 # Concurrency
 
-Concurrency for tattlers present the same challenge as
-concurrency for error variables.  In the above-mentioned project, the
-concurrency mechanisms for the structures also protect the tattlers.
+Concurrency for tattlers present the same challenge as concurrency for error
+variables.  In the above-mentioned project, the concurrency mechanisms for
+the structures also protect the tattlers.
 
-Lacking a use case,
-I haven't defined a "SerialTattler" type.
+Lacking a use case, I haven't defined a "SerialTattler" type.
 
 # Advice
 
-  - Return errors, not tattlers.
-  - The most-used methods are Latch(), Latchf(), Le(), and Logf().
-  - A deferred Logf() is your friend.
+  - It's commonplace to return an error from a tat, which the caller then
+    latches into the same tat.  This is normal; the first latch wins.
+  - The most-used methods are Latch(), Latchf(), Le(), and Log().
+  - A deferred Log() is your friend.
 */
 package tattle
 
@@ -75,9 +69,7 @@ type Tattler struct {
 // A tale exists only for Tattlers that have latched an error
 type tale struct {
 	latched error
-	trace   string // backtrace string
-	file    string // used in test
-	line    int    // used in test
+	frames  []runtime.Frame
 	logged  bool
 	missed  int
 }
@@ -88,26 +80,19 @@ func (tat *Tattler) fullLatch(b int, e error) bool {
 			tp := new(tale)
 			tat.talep = tp
 			tp.latched = e
+
+			// Capture backtrace frames.  The following
+			// make defines how many frames appear.
 			pc := make([]uintptr, 3)
 			n := runtime.Callers(b+2, pc)
 			pc = pc[:n] // truncate invalid entries
-			sb := strings.Builder{}
-			if n <= 0 {
-				fmt.Fprintf(&sb, "\n\tNo back trace available\n")
-			} else {
-				frames := runtime.CallersFrames(pc)
-				frame, more := frames.Next()
-				tp.file = filepath.Base(frame.File)
-				tp.line = frame.Line
-				fmt.Fprintf(&sb, "\tLatched at:  %s:%d in %s\n",
-					tp.file, tp.line, frame.Function)
-				for more {
-					frame, more = frames.Next()
-					fmt.Fprintf(&sb, "\tCalled From: %s:%d in %s\n",
-						filepath.Base(frame.File), frame.Line, frame.Function)
-				}
+
+			var frame runtime.Frame
+			frames := runtime.CallersFrames(pc)
+			for more := true; more; {
+				frame, more = frames.Next()
+				tp.frames = append(tp.frames, frame)
 			}
-			tp.trace = sb.String()
 		} else {
 			if e != tat.talep.latched {
 				tat.talep.missed++
@@ -144,15 +129,18 @@ func (tat *Tattler) Latch(e error) bool {
 }
 
 // Latchf creates a new error using printf-style arguments,
-// passes it to Latch(), and returns the latched error.  The
-// returned error may have been latched prior to Latchf().
+// passes it to Latch(), and returns the latched error.
+// The error is created with fmt.Errorf so the %w verb
+// is available in the format string.
+// See fmt.Errorf for details.
 func (tat *Tattler) Latchf(s string, v ...interface{}) error {
 	tat.fullLatch(1, fmt.Errorf(s, v...))
 	return tat.Le()
 
 }
 
-// Le (mnemonics Latched Error, or tattle) returns the latched error, nil if none
+// Le returns the latched error, nil if none.  Mnemonics for Le
+// are Latched error, or the punny tat.Le() "tattle".
 func (tat *Tattler) Le() error {
 	if tat.talep == nil {
 		return nil
@@ -181,7 +169,7 @@ func (tat *Tattler) Led() bool { return tat.talep != nil }
 // Each Tattler instance is only logged once.  The encapsulated error
 // may be logged again if it is extracted and latched into another Tattler instance.
 func (tat *Tattler) Log() {
-	tat.Logf("Latched")
+	tat.Logf("")
 }
 
 // Logf logs a latched error, using the provided arguments as a printf-style
@@ -209,7 +197,7 @@ func (tat *Tattler) Logf(s string, v ...interface{}) {
 	t := tat.talep
 	if t != nil && !t.logged {
 		prefix := fmt.Sprintf(s, v...)
-		log.Printf("%s: %s", prefix, tat.String())
+		log.Printf("%s%s", prefix, tat.String())
 		t.logged = true
 	}
 }
@@ -218,16 +206,24 @@ func (tat *Tattler) Logf(s string, v ...interface{}) {
 func (tat *Tattler) Ok() bool { return tat.talep == nil }
 
 // String returns a string containing details of the latched error,
-// including the source code file and line number of the latch.
+// including, including a limited trace back.
 func (tat *Tattler) String() string {
 
 	t := tat.talep
 	if t != nil && t.latched != nil {
 		sb := strings.Builder{}
 
-		fmt.Fprintf(&sb, "%s\n%s", t.latched.Error(), t.trace)
+		fmt.Fprintf(&sb, "%s\n", t.latched.Error())
+		if len(t.frames) > 0 { // Yes, always is >0, but I'm paranoid.
+			fmt.Fprintf(&sb, " Latched at:  %s:%d in %s\n",
+				filepath.Base(t.frames[0].File), t.frames[0].Line, t.frames[0].Function)
+			for _, frame := range t.frames[1:] {
+				fmt.Fprintf(&sb, " Called From: %s:%d in %s\n",
+					filepath.Base(frame.File), frame.Line, frame.Function)
+			}
+		}
 		if t.missed != 0 {
-			fmt.Fprintf(&sb, "%d post-latch errors\n", t.missed)
+			fmt.Fprintf(&sb, " %d post-latch errors\n", t.missed)
 		}
 		return sb.String()
 	}
