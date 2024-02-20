@@ -124,3 +124,10 @@ func TestLogf(t *testing.T) {
 
 	log.SetOutput(w)
 }
+
+func TestSetFrame(t *testing.T) {
+	cf := callFrames
+	SetFrames(10000)
+	assert.Assert(t, callFrames == 100)
+	SetFrames(cf)
+}
