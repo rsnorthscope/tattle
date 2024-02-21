@@ -25,7 +25,7 @@ func (rp *Record) Check() error {
 		return rp.tat.Le()
 	}
 
-	// Body of function starts here.  Here is a simple sample.
+	// Body of function starts here
 	if len(rp.Name) > 1000 {
 		return rp.tat.Latchf("name length %d exceeds maximum %d", len(rp.Name), 1000)
 	}
