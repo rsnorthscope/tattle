@@ -20,12 +20,12 @@ func ExampleSetFrames() {
 			tat.Latchf("ERROR")
 			fmt.Printf("Example error, default trace back: %s", tat.String())
 
-			tat = tattler{}
+			tat.Reset()
 			SetFrames(0)
 			tat.Latchf("ERROR")
 			fmt.Printf("Example error, no trace back:%s", tat.String())
 
-			tat = tattler{}
+			tat.Reset()
 			SetFrames(1)
 			tat.Latchf("ERROR")
 			fmt.Printf("Example error, 1 frame trace back: %s", tat.String())
