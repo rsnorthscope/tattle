@@ -126,8 +126,8 @@ func TestLogf(t *testing.T) {
 }
 
 func TestSetFrame(t *testing.T) {
-	cf := callFrames
+	cf := traceFrames
 	SetFrames(10000)
-	assert.Assert(t, callFrames == 100)
+	assert.Assert(t, traceFrames == 100)
 	SetFrames(cf)
 }

@@ -90,7 +90,7 @@ type tale struct {
 }
 
 // number of call frames logged
-var callFrames = uint32(3)
+var traceFrames = uint32(3)
 
 // SetFrames sets the number of trace back frames, default 3, included with
 // errors reported by Log/Logf.  The requested number of frames is stopped
@@ -103,7 +103,7 @@ func SetFrames(f uint32) {
 	if f > 100 {
 		f = 100
 	}
-	callFrames = f
+	traceFrames = f
 }
 
 // fullLatch contains the latch logic.
@@ -117,8 +117,8 @@ func (tat *Tattler) fullLatch(b int, e error) bool {
 			tp.latched = e
 
 			// Capture backtrace frames.
-			if callFrames > 0 {
-				pc := make([]uintptr, callFrames)
+			if traceFrames > 0 {
+				pc := make([]uintptr, traceFrames)
 				n := runtime.Callers(b+2, pc)
 				pc = pc[:n] // truncate invalid entries
 
