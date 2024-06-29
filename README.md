@@ -3,6 +3,8 @@ The documentation for package tattle is available via the
 
 ## Revision history
 ```
+2024/06/29 v1.0.3 rebase to v1.0.2 to remove origin project info
+2024/06/20 v1.0.2 Removed unhelpful examples
 2024/06/18 v1.0.1 Documentation update and a bug fix.
 2024/04/09 v1.0.0 Paint is dry.
 2024/02/24 v0.1.4 Tighten documentation.  Reset method.
