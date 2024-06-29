@@ -1,4 +1,4 @@
-// Copyright 2019-2024 Richard Northscope.  All rights reserved.
+// Copyright 2024 Richard Northscope.  All rights reserved.
 // Use of this source code is governed by the
 // MIT license that can be found in the LICENSE file.
 
@@ -35,8 +35,6 @@ particular structure. In this case it may make sense to use a tat as a local
 variable, and pass a pointer to it to the subfunctions, each of which should
 defer a tat Log() call, latch errors to the tat, and immediately return when
 that tat is latched.  This is helpful but less common scenario.
-
-Tattlers aren't for helpful for every error situation.
 
 Here is a tattler log message from an example included for the Tattler Logf
 function. The messages will be considerably shorter for local packages :-) :
