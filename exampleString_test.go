@@ -19,8 +19,8 @@ func ExampleTattler_String() {
 
 	// Output:
 	// Example Error
-	//  Latched at:  ExampleString_test.go:15 in github.com/rsnorthscope/tattle.ExampleTattler_String.ExampleTattler_String.func1.func2
-	//  Called From: ExampleString_test.go:17 in github.com/rsnorthscope/tattle.ExampleTattler_String.func1
-	//  Called From: ExampleString_test.go:18 in github.com/rsnorthscope/tattle.ExampleTattler_String
+	//  Latched at:  exampleString_test.go:15 in github.com/rsnorthscope/tattle.ExampleTattler_String.ExampleTattler_String.func1.func2
+	//  Called From: exampleString_test.go:17 in github.com/rsnorthscope/tattle.ExampleTattler_String.func1
+	//  Called From: exampleString_test.go:18 in github.com/rsnorthscope/tattle.ExampleTattler_String
 
 }
