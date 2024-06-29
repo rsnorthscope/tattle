@@ -13,13 +13,14 @@ A Tattler is a lightweight object that records, or Latches, the first error
 it is given. Tattler defines a mechanism to log the error, including the
 source code location where the error was latched.
 
-Tattlers aren't pretty, but they can save you a lot of debugging time:
+Tattlers can save  a lot of debugging time:
 
- 1. Include a Tattler variable, which I usually call 'tat', in types
-    (structures) that have complicated methods.
- 2. Defer a Tattle Log() call in every method, so errors get logged in close
+ 1. Include a Tattler variable, which I usually call 'tat', in instances of
+    types that have complex methods.  This effectively attributes errors to
+    a given instance.
+ 2. Latch errors in the methods to the tat.
+ 3. Defer a Log/Logf call in every method, so that errors get logged in close
     proximity to their occurrence.
- 3. Latch errors in the methods to the tat.
  4. If the tat latches with an unexpected error (n.b., most of them), treat
     the enclosing structure instance as tainted and stop doing anything with
     it. Simply return if called with the tat latched.
@@ -55,16 +56,16 @@ function. The messages will be considerably shorter for local packages :-) :
 Prior to an error, a tattler is a nil pointer to a concrete type known as
 the tale.
 
-When the Latch methods see a non-nil error, they allocate the tale
-to store the error and 3 frames from the stack.  Only the first non-nil
-error is latched; subsequent different non-nil errors are counted but the
-error value is discarded.
+When the Latch methods see a non-nil error, they allocate the tale to store
+the error and 3 frames from the stack.  Only the first non-nil error is
+latched; subsequent different non-nil errors are counted but the error value
+is discarded.
 
 The log functions are low cost in the non-error case.  The printf-style
 string in Logf isn't expanded unless there is an error.
 
-A tattler doesn't implement the error interface. I tried that.  It
-was a mistake.
+A tattler doesn't implement the error interface. I tried that.  It was a
+mistake.
 
 # Concurrency
 
