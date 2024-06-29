@@ -73,12 +73,6 @@ variables.  In the above-mentioned project, the concurrency mechanisms for
 the structures also protect the tattlers.
 
 Lacking a use case, I haven't defined a "SerialTattler" type.
-
-# Final Thoughts
-
-  - If you have a Tattler, latch (almost) every error.
-  - FWIW the most-used methods are Latch(), Latchf(), Le(), and Logf().
-  - A deferred Log()/Logf() is your friend.
 */
 package tattle
 
@@ -88,6 +82,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 )
 
 // A Tattler is used to record an error in a structure or within a call flow.
@@ -103,6 +98,26 @@ type tale struct {
 	missed  int
 }
 
+// number of call frames logged
+var callFrames = int32(3)
+
+// SetFrames sets the number of trace back frames, default 3, included with
+// errors reported by Log/Logf.  The requested number of frames is stopped
+// to the range [0,100] and applies at process level  The return value is
+// the previous setting.
+func SetFrames(f int32) int32 {
+	prior := callFrames
+	switch {
+	case f < 0:
+		f = 0
+	case f > 100:
+		f = 100
+	}
+	atomic.StoreInt32(&callFrames, f)
+	return prior
+
+}
+
 // fullLatch contains the latch logic.
 // parameter b is the difference in frames
 // between Latch and fulLatch, normally 1.
@@ -113,17 +128,19 @@ func (tat *Tattler) fullLatch(b int, e error) bool {
 			tat.talep = tp
 			tp.latched = e
 
-			// Capture backtrace frames.  The following
-			// make defines how many frames appear.
-			pc := make([]uintptr, 3)
-			n := runtime.Callers(b+2, pc)
-			pc = pc[:n] // truncate invalid entries
+			// Capture backtrace frames.
+			cf := callFrames
+			if cf > 0 {
+				pc := make([]uintptr, cf)
+				n := runtime.Callers(b+2, pc)
+				pc = pc[:n] // truncate invalid entries
 
-			var frame runtime.Frame
-			frames := runtime.CallersFrames(pc)
-			for more := true; more; {
-				frame, more = frames.Next()
-				tp.frames = append(tp.frames, frame)
+				var frame runtime.Frame
+				frames := runtime.CallersFrames(pc)
+				for more := true; more; {
+					frame, more = frames.Next()
+					tp.frames = append(tp.frames, frame)
+				}
 			}
 		} else {
 			if e != tat.talep.latched {
