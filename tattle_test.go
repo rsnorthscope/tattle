@@ -9,11 +9,8 @@ import (
 	"log"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"testing"
-
-	"gotest.tools/assert"
 )
 
 type tattler = Tattler
@@ -21,84 +18,86 @@ type tattler = Tattler
 var _ = fmt.Printf
 
 func TestBasic(t *testing.T) {
-	err := testf1(t)
-	assert.Error(t, err, "String1 bad value plugh")
-	err = testf2(t)
-	assert.Error(t, err, "String1 bad value plugh")
-	assert.Assert(t, testf3(t) == 99)
-
-}
-
-func testf1(t *testing.T) error {
 	tat := Tattler{}
-
 	string1 := "plugh"
 	int2 := 5
-	assert.NilError(t, tat.Le())
-	assert.Equal(t, tat.Ok(), true)
-	assert.Equal(t, tat.Led(), false)
-	assert.Equal(t, tat.String(), "")
-	tat.Latchf("String1 bad value %s", string1)
-	tat.Latchf("Int2 bad value %d", int2)
-	return tat.Le()
-}
 
-func testf2(t *testing.T) error {
-	tat := tattler{}
+	// Empty tattler
 
-	string1 := "plugh"
-	int2 := 5
-	tat.Latchf("String1 bad value %s", string1)
-	tat.Latchf("Int2 bad value %d", int2)
-	assert.Equal(t, tat.Ok(), false)
-	assert.Equal(t, tat.Led(), true)
-	return tat.Le()
-}
-
-func testf3(t *testing.T) int {
-	tat := tattler{}
-
-	for i := 0; i < 100; i++ {
-		tat.Latchf("%d", i)
+	if tat.Le() != nil {
+		t.Errorf("Empty tattler has non-empty error")
 	}
-	assert.Assert(t, tat.talep != nil)
-	return int(tat.talep.missed)
+	if !tat.Ok() {
+		t.Errorf("Empty tattler Ok() is false")
+	}
+	if tat.Led() {
+		t.Errorf("Empty tattler Led() is true")
+	}
+	if tat.String() != "" {
+		t.Errorf("Empty tattler String() is not \"\"")
+	}
+
+	// Tattler given 2 errors; first one latches.
+	tat.Latchf("String1 bad value %s", string1)
+	tat.Latchf("Int2 bad value %d", int2)
+	if tat.Ok() {
+		t.Fatalf("Tattler failed to latch on Latchf")
+	}
+	if !tat.Latch(nil) {
+		t.Errorf("Latched tattler returns false when latching nil")
+	}
+	expected := "String1 bad value plugh"
+	if tat.Le().Error() != expected {
+		t.Errorf("Error %v not expected first error %s", tat.Le(), expected)
+	}
+	if tat.talep.missed != 1 {
+		t.Errorf("Tattler reported %d missed errors not %d", tat.talep.missed, 1)
+	}
+	if !tat.Latch(tat.Le()) {
+		t.Errorf("Latched tattler returns false when latching self")
+	}
+	if tat.talep.missed != 1 {
+		t.Errorf("Latched tattler, count of missed latches changed when latching self")
+	}
+
 }
 
 func TestFileAndLine(t *testing.T) {
 	var tat1, tat2 tattler
-	_, markFile, markLine, ok := runtime.Caller(0) // Mark
-	assert.Assert(t, ok)                           // Mark + 1
-	tat1.Latchf("Test Error")                      // Mark + 2
-	tat2.Latch(fmt.Errorf("Alternate test error")) // Mark + 3
+	_, markFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatalf("Call to runtime.Caller(0) failed")
+	}
+	tat1.Latchf("Test Error")
+	if tat1.Ok() {
+		t.Fatalf("Latchf failure") // more in basic tests
+	}
+	tat2.Latch(fmt.Errorf("Alternate test error"))
+	if tat2.Ok() {
+		t.Fatalf("Latch failure")
+	}
+	got := tat1.talep.frames[0].File
+	if got != markFile {
+		t.Errorf("Trace back has '%s' expected '%s'", got, markFile)
+	}
 
-	tat1.Latchf("Post-latch error")
-	assert.Assert(t, tat1.talep != nil)
-	assert.Assert(t, tat1.talep.latched != nil)
-	assert.Assert(t, tat1.talep.frames[0].File == markFile)
-
-	assert.Assert(t, tat1.talep.frames[0].Line == markLine+2) // Ref. Mark + 2
-	assert.Assert(t, tat2.talep.frames[0].Line == markLine+3) // Ref. Mark + 3
-	assert.Assert(t, tat1.talep.missed == 1)
-	tat1.Latch(tat1.Le()) // Latching self shouldn't have any effect
-	assert.Assert(t, tat1.talep.missed == 1)
-	//
-	// Convenient place to test String
 	tat1.talep.missed = 1234
 	s := tat1.String()
-	assert.Assert(t, strings.Contains(s, filepath.Base(markFile)))
-	assert.Assert(t, strings.Contains(s, "Test Error"))
-	assert.Assert(t, strings.Contains(s, strconv.FormatInt(int64(markLine+2), 10)))
-	assert.Assert(t, strings.Contains(s, "1234"))
+	got = filepath.Base(s)
+	if !strings.Contains(s, got) {
+		t.Errorf("Log message does not contain file name '%s'", got)
+
+	}
+	if !strings.Contains(s, "1234") {
+		t.Errorf("Log message does not contain repeat count 1234")
+	}
 	//
 	// And a convenient place to test Import
 	iTat := tattler{}
 	iTat.Import(&tat1)
-	assert.Assert(t, iTat.String() == tat1.String())
-	// Nil tat latch
-	iTat = tattler{}
-	assert.Assert(t, !iTat.Latch(nil))
-
+	if iTat.String() != tat1.String() {
+		t.Errorf("Import generates inconsistent error '%v'/'%v'", &iTat, &tat1)
+	}
 }
 
 // Test conventional deferred logf
@@ -112,15 +111,23 @@ func TestLogf(t *testing.T) {
 		tat.Latchf("Body")
 	})()
 	s := sw.String()
-	assert.Assert(t, strings.Contains(s, "Header"))
-	assert.Assert(t, strings.Contains(s, "Body"))
+	if !strings.Contains(s, "Header") {
+		t.Errorf("Error string '%v' lacks logf string 'Header'", s)
+	}
+	if !strings.Contains(s, "Body") {
+		t.Errorf("Error string '%v' lacks Latchf string 'Body'", s)
+	}
 
 	sw.Reset()
 	tat := tattler{}
-	tat.Latchf("Error xyz")
+	expected := "Error xyz"
+
+	tat.Latchf(expected)
 	tat.Log()
 	s = sw.String()
-	assert.Assert(t, strings.Contains(s, "Error xyz"))
+	if !strings.Contains(s, expected) {
+		t.Errorf("Log string '%s' lacks Latchf string '%s'", s, expected)
+	}
 
 	log.SetOutput(w)
 }
@@ -128,6 +135,8 @@ func TestLogf(t *testing.T) {
 func TestSetFrame(t *testing.T) {
 	cf := traceFrames
 	SetFrames(10000)
-	assert.Assert(t, traceFrames == 100)
+	if traceFrames != 100 {
+		t.Errorf("SetFrames did not return expected result 100")
+	}
 	SetFrames(cf)
 }

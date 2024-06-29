@@ -3,38 +3,52 @@
 // MIT license that can be found in the LICENSE file.
 
 /*
-# Motivation
+# Synopsis
 
-A Tattler is a lightweight object that records, or Latches, the first error
-it is given. Tattler defines a mechanism to log the error, including an
-abridged trace-back showing source code location where the error was
-latched.
+Tattlers provide a mechanism to "latch" and log an error value associated
+with some structure.  "Latching" is described further below.
 
-Tattlers aren't meant to be used with all errors.  They are meant to (1)
-focus attention on the first error that occurs in a complicated structure or
-procedure, and (2) mark a structure or procedure as tainted, to suppress an
-error cascade.
+One benefit of tattlers accrues from a "deferred logging" capability.
 
-Here is an effective way to use a Tattler for structures:
+Tattlers are not complex.  There may be a good case for re-implementing
+tattler-like ideas in one of your own packages. The "Implementation" section
+below may be helpful.
+
+# Introduction and Use Case
+
+Package tattle was developed as part of a project that processes records
+from many sources for storage in an immutable database. The processing
+pipelines use Tattlers to store, or "latch" the first error encountered
+during processing within the record that triggered the error.  If the error
+cannot be resolved and cleared during processing, the record is rejected.
+
+A Tattler does not implement the Error interface and is in no way intended
+as a wrapper or alternative Error type.  It simply stores the first error
+value.
+
+Tattlers have logging methods, which do nothing if no error has been
+latched.  The Tattler method Logf is typically used to provide context
+information for the error, for example, a record ID.  This context is
+usually known at the start of functions.  This affords a very helpful
+capability: By deferring a call to a tattler Logf at the beginning of a
+function, you automatically enable logging for any latched error that occurs
+in any path through the function.
+
+# Effective Use
+
+Here is an effective way to use Tattlers:
 
  1. Include a Tattler variable, e.g., 'tat', in instances of types that have
     complex methods.  This effectively attributes errors to a given
     instance.
  2. Latch errors in the methods to the tat.
- 3. Defer a tat Log/Logf call in every method, so that errors get logged in
+ 3. Defer a tat Logf call in every method, so that errors get logged in
     close proximity to their occurrence.
- 4. Once a tat is latched, treat the enclosing structure instance as tainted
-    and stop doing anything with it. Simply return if called with the tat
-    latched.
+ 4. Once a tat is latched, treat the enclosing structure instance as
+    tainted. If called with the tattler latched, it is fine to return the
+    already-latched error.  (Return the error, not the tattler.)
 
 A godoc example of the above follows this introduction.
-
-A secondary use of Tattlers is to monitor a complicated sequence that is
-broken into sub-functions, where an error doesn't call into question any
-particular structure. In this case it may make sense to use a tat as a local
-variable, and pass a pointer to it to the subfunctions, each of which should
-defer a tat Log() call, latch errors to the tat, and immediately return when
-that tat is latched.  This is helpful but less common scenario.
 
 Here is a tattler log message from an example included for the Tattler Logf
 function. The messages will be considerably shorter for local packages :-) :
@@ -46,25 +60,25 @@ function. The messages will be considerably shorter for local packages :-) :
 
 # Implementation
 
-Prior to an error, a tattlers are a nil pointer to a concrete type known as
-a tale.
+Prior to an error, a tattler is a nil pointer to a concrete private type
+known as a tale.
 
-When the Latch methods see a non-nil error, they allocate the tale to store
-the error and a few (default 3) frames from the stack.  Only the first
-non-nil error is latched; subsequent different non-nil errors are counted
-but the error value is discarded.
+When a Latch method sees a non-nil error, it allocates the tale to store the
+error and a few (default 3) frames from the stack.  This backtrace is only
+accessible by the log functions; the error itself is unchanged. Only
+the first non-nil error is latched. Subsequent different errors are counted
+but their error values are not recorded by the tattler.
 
 The log functions are low cost in the non-error case.  The printf-style
 string in Logf isn't expanded unless there is an error.
 
-A Tattler doesn't implement the error interface.  It did at one time, but that
-was more confusing than helpful.
+The gnarly bits of code where stack trace information is gathered closely
+follow the examples in the golang runtime documentation.
 
-# Concurrency
-
-Concurrency for tattlers present the same challenge as concurrency for error
-variables.  In the project for which Tattlers were developed, the
-concurrency model for the project protects the tattlers.
+Tattlers have no inherent facility for concurrency.  If a structure contains
+a Tattler (or an error variable) and there is a possibility of concurrent
+access to the structure, the structure itself should be appropriately
+protected.
 */
 package tattle
 
@@ -141,7 +155,8 @@ func (tat *Tattler) fullLatch(b int, e error) bool {
 // Import has semantics similar to Latch, except that its argument
 // is a Tattler not an error.  Import is rarely used.
 // An example use case is to taint a container
-// with a tattle from an enclosed structure.
+// with a tattle from an enclosed structure
+// without generating an additional log message.
 func (tat *Tattler) Import(itp *Tattler) bool {
 	if itp.talep != nil && tat.talep == nil {
 		tat.talep = new(tale)
@@ -161,7 +176,7 @@ func (tat *Tattler) Latch(e error) bool {
 	if e != nil {
 		return tat.fullLatch(1, e)
 	}
-	return false
+	return tat.talep != nil
 }
 
 // Latchf creates a new error using printf-style arguments,
@@ -192,10 +207,10 @@ func (tat *Tattler) Led() bool { return tat.talep != nil }
 // Log logs a latched error.  Log is a no-op if the tattler is not latched,
 // or if the error was previously logged.
 //
-// Typically the call to Logf is deferred at the beginning of a method, so
-// that it will log any error that occurs during the method.  For example
-// for a type Record with embedded mutex mux and tattler tat, you might
-// write:
+// Typically the call to Log (though more often Logf below) is deferred at
+// the beginning of a method, so that it will log any error that occurs
+// during the method.  For example for a type Record with embedded mutex mux
+// and tattler tat, you might write:
 //
 //	func (p *Record) Method() {
 //	     p.mux.Lock()         // common. Locks record,
@@ -223,7 +238,7 @@ func (tat *Tattler) Log() {
 //	func (p *Record) Method() {
 //	     p.mux.Lock()         // common. Locks record,
 //	     defer p.mux.Unlock() // including tattler.
-//	     defer p.tat.Logf("Record.Method")
+//	     defer p.tat.Logf("Record id %d", p.id)
 //
 //	     <body of Method() with various Latch() cases>
 //	}
@@ -249,13 +264,13 @@ func (tat *Tattler) fullLogf(s string, v ...interface{}) {
 // Ok returns true if no error has been latched.
 func (tat *Tattler) Ok() bool { return tat.talep == nil }
 
-// Reset resets the tattler.  This is common only in tests.
+// Reset resets the tattler.
 func (tat *Tattler) Reset() {
 	tat.talep = nil
 }
 
 // String returns a string containing details of the latched error,
-// including, including a limited trace back.
+// including a limited trace back.
 func (tat *Tattler) String() string {
 
 	t := tat.talep
@@ -263,7 +278,7 @@ func (tat *Tattler) String() string {
 		sb := strings.Builder{}
 
 		fmt.Fprintf(&sb, "%s\n", t.latched.Error())
-		if len(t.frames) > 0 { // Yes, always is >0, but I'm paranoid.
+		if len(t.frames) > 0 {
 			fmt.Fprintf(&sb, " Latched at:  %s:%d in %s\n",
 				filepath.Base(t.frames[0].File), t.frames[0].Line, t.frames[0].Function)
 			for _, frame := range t.frames[1:] {
