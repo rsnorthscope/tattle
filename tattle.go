@@ -55,15 +55,15 @@ function. The messages will be considerably shorter for local packages :-) :
 Prior to an error, a tattler is a nil pointer to a concrete type known as
 the tale.
 
-When the Latch methods are given an error to latch, they allocate the tale
+When the Latch methods see a non-nil error, they allocate the tale
 to store the error and 3 frames from the stack.  Only the first non-nil
 error is latched; subsequent different non-nil errors are counted but the
 error value is discarded.
 
 The log functions are low cost in the non-error case.  The printf-style
-string in a Logf isn't expanded unless there is an error.
+string in Logf isn't expanded unless there is an error.
 
-A tattler doesn't implement the error interface. I tried it and decided it
+A tattler doesn't implement the error interface. I tried that.  It
 was a mistake.
 
 # Concurrency
@@ -105,7 +105,8 @@ var callFrames = uint32(3)
 // to the range [0,100].
 //
 // SetFrames is meant to be called, if needed, during startup before
-// multiple goroutines can see tattlers.
+// multiple goroutines can see tattlers.  The setting applies at the process
+// level.
 func SetFrames(f uint32) {
 	if f > 100 {
 		f = 100
@@ -145,7 +146,7 @@ func (tat *Tattler) fullLatch(b int, e error) bool {
 	return tat.talep != nil
 }
 
-// Import has semantics similar to Latch, except that it's argument
+// Import has semantics similar to Latch, except that its argument
 // is a Tattler not an error.  Import is rarely used.
 // An example use case is to taint a container
 // with a tattle from an enclosed structure.
@@ -241,10 +242,14 @@ func (tat *Tattler) Log() {
 func (tat *Tattler) Logf(s string, v ...interface{}) {
 	t := tat.talep
 	if t != nil && !t.logged {
-		prefix := fmt.Sprintf(s, v...)
-		log.Printf("%s%s", prefix, tat.String())
-		t.logged = true
+		tat.fullLogf(s, v...)
 	}
+}
+
+func (tat *Tattler) fullLogf(s string, v ...interface{}) {
+	prefix := fmt.Sprintf(s, v...)
+	log.Printf("%s%s", prefix, tat.String())
+	tat.talep.logged = true
 }
 
 // Ok returns true if no error has been latched.
