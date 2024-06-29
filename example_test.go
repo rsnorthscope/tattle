@@ -15,7 +15,6 @@ type Record struct {
 // This example shows the typical method structure for
 // a type that includes a tattler
 
-// Check verifies sanity of a record.
 func (rp *Record) Check() error {
 	// Always defer a log call.
 	defer rp.tat.Logf("Record id %d", rp.ID)
@@ -40,7 +39,7 @@ func Example() {
 
 	rp := &Record{ID: 15, Age: 1001}
 	//
-	// In this case, Example() doesn't know about tattlers
+	// The caller need not know about tattlers
 	err := rp.Check()
 	if err != nil {
 		// error recovery
