@@ -1,4 +1,7 @@
 // Copyright 2019-2024 Richard Northscope.  All rights reserved.
+// Use of this source code is governed by the
+// MIT license that can be found in the LICENSE file.
+
 package tattle
 
 import (
@@ -12,6 +15,8 @@ import (
 
 	"gotest.tools/assert"
 )
+
+type tattler = Tattler
 
 var _ = fmt.Printf
 
@@ -39,7 +44,7 @@ func testf1(t *testing.T) error {
 }
 
 func testf2(t *testing.T) error {
-	tat := Tattler{}
+	tat := tattler{}
 
 	string1 := "plugh"
 	int2 := 5
@@ -51,7 +56,7 @@ func testf2(t *testing.T) error {
 }
 
 func testf3(t *testing.T) int {
-	tat := Tattler{}
+	tat := tattler{}
 
 	for i := 0; i < 100; i++ {
 		tat.Latchf("%d", i)
@@ -61,7 +66,7 @@ func testf3(t *testing.T) int {
 }
 
 func TestFileAndLine(t *testing.T) {
-	var tat1, tat2 Tattler
+	var tat1, tat2 tattler
 	_, markFile, markLine, ok := runtime.Caller(0) // Mark
 	assert.Assert(t, ok)                           // Mark + 1
 	tat1.Latchf("Test Error")                      // Mark + 2
@@ -70,10 +75,10 @@ func TestFileAndLine(t *testing.T) {
 	tat1.Latchf("Post-latch error")
 	assert.Assert(t, tat1.talep != nil)
 	assert.Assert(t, tat1.talep.latched != nil)
-	assert.Assert(t, tat1.talep.file == filepath.Base(markFile))
+	assert.Assert(t, tat1.talep.frames[0].File == markFile)
 
-	assert.Assert(t, tat1.talep.line == markLine+2) // Ref. Mark + 2
-	assert.Assert(t, tat2.talep.line == markLine+3) // Ref. Mark + 3
+	assert.Assert(t, tat1.talep.frames[0].Line == markLine+2) // Ref. Mark + 2
+	assert.Assert(t, tat2.talep.frames[0].Line == markLine+3) // Ref. Mark + 3
 	assert.Assert(t, tat1.talep.missed == 1)
 	tat1.Latch(tat1.Le()) // Latching self shouldn't have any effect
 	assert.Assert(t, tat1.talep.missed == 1)
@@ -87,11 +92,11 @@ func TestFileAndLine(t *testing.T) {
 	assert.Assert(t, strings.Contains(s, "1234"))
 	//
 	// And a convenient place to test Import
-	iTat := Tattler{}
+	iTat := tattler{}
 	iTat.Import(&tat1)
 	assert.Assert(t, iTat.String() == tat1.String())
 	// Nil tat latch
-	iTat = Tattler{}
+	iTat = tattler{}
 	assert.Assert(t, !iTat.Latch(nil))
 
 }
@@ -102,7 +107,7 @@ func TestLogf(t *testing.T) {
 	sw := new(strings.Builder)
 	log.SetOutput(sw)
 	(func() {
-		tat := Tattler{}
+		tat := tattler{}
 		defer tat.Logf("Header")
 		tat.Latchf("Body")
 	})()
@@ -111,7 +116,7 @@ func TestLogf(t *testing.T) {
 	assert.Assert(t, strings.Contains(s, "Body"))
 
 	sw.Reset()
-	tat := Tattler{}
+	tat := tattler{}
 	tat.Latchf("Error xyz")
 	tat.Log()
 	s = sw.String()
