@@ -42,6 +42,6 @@ func Example() {
 	// The caller need not know about tattlers
 	err := rp.Check()
 	if err != nil {
-		// error recovery
+		// error recovery recovery or return
 	}
 }

@@ -22,7 +22,7 @@ pipelines use Tattlers to store, or "latch" the first error encountered
 during processing within the record that triggered the error.  If the error
 cannot be resolved and cleared during processing, the record is rejected.
 
-A Tattler does not implement the Error interface and is in no way intended
+A Tattler does not implement the Error interface and is not intended
 as a wrapper or alternative Error type.  It simply stores the first error
 value.
 
@@ -39,8 +39,7 @@ in any path through the function.
 Here is an effective way to use Tattlers:
 
  1. Include a Tattler variable, e.g., 'tat', in instances of types that have
-    complex methods.  This effectively attributes errors to a given
-    instance.
+    complex methods.
  2. Latch errors in the methods to the tat.
  3. Defer a tat Logf call in every method, so that errors get logged in
     close proximity to their occurrence.
@@ -49,14 +48,6 @@ Here is an effective way to use Tattlers:
     already-latched error.  (Return the error, not the tattler.)
 
 A godoc example of the above follows this introduction.
-
-Here is a tattler log message from an example included for the Tattler Logf
-function. The messages will be considerably shorter for local packages :-) :
-
-	2024/02/18 15:50:30 tr record 15:name size 8192 exceeds max 1000
-	 Latched at:  exampleLogf_test.go:49 in github.com/rsnorthscope/tattle.ExampleTattler_Logf.func2
-	 Called From: exampleLogf_test.go:35 in github.com/rsnorthscope/tattle.ExampleTattler_Logf.func1
-	 Called From: exampleLogf_test.go:65 in github.com/rsnorthscope/tattle.ExampleTattler_Logf
 
 # Implementation
 
@@ -122,7 +113,7 @@ func SetFrames(f uint32) {
 
 // fullLatch contains the latch logic.
 // parameter b is the difference in frames
-// between Latch and fulLatch, normally 1.
+// between Latch and fulLatch.
 func (tat *Tattler) fullLatch(b int, e error) bool {
 	if e != nil {
 		if tat.talep == nil {
@@ -171,7 +162,7 @@ func (tat *Tattler) Import(itp *Tattler) bool {
 // If e is not nil and a prior error has been latched that differs from e,
 // then a count of post-latch errors is incremented.
 //
-// Latch returns true if an error is or was previously latched.
+// Latch returns true if an error is, or was previously, latched.
 func (tat *Tattler) Latch(e error) bool {
 	if e != nil {
 		return tat.fullLatch(1, e)
@@ -242,9 +233,6 @@ func (tat *Tattler) Log() {
 //
 //	     <body of Method() with various Latch() cases>
 //	}
-//
-// In this case Logf will log the
-// error prefixed with "Record.Method:"
 //
 // Each Tattler instance is only logged once.  The encapsulated error
 // may be logged again if it is extracted and latched into another Tattler instance.

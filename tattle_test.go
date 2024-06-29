@@ -98,6 +98,11 @@ func TestFileAndLine(t *testing.T) {
 	if iTat.String() != tat1.String() {
 		t.Errorf("Import generates inconsistent error '%v'/'%v'", &iTat, &tat1)
 	}
+	// Test reset
+	tat1.Reset()
+	if tat1.Led() {
+		t.Errorf("tat.Reset() failed to clear tattler")
+	}
 }
 
 // Test conventional deferred logf
