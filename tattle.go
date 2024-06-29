@@ -82,7 +82,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync/atomic"
 )
 
 // A Tattler is used to record an error in a structure or within a call flow.
@@ -99,23 +98,19 @@ type tale struct {
 }
 
 // number of call frames logged
-var callFrames = int32(3)
+var callFrames = uint32(3)
 
 // SetFrames sets the number of trace back frames, default 3, included with
 // errors reported by Log/Logf.  The requested number of frames is stopped
-// to the range [0,100] and applies at process level  The return value is
-// the previous setting.
-func SetFrames(f int32) int32 {
-	prior := callFrames
-	switch {
-	case f < 0:
-		f = 0
-	case f > 100:
+// to the range [0,100].
+//
+// SetFrames is meant to be called, if needed, during startup before
+// multiple goroutines can see tattlers.
+func SetFrames(f uint32) {
+	if f > 100 {
 		f = 100
 	}
-	atomic.StoreInt32(&callFrames, f)
-	return prior
-
+	callFrames = f
 }
 
 // fullLatch contains the latch logic.
@@ -129,9 +124,8 @@ func (tat *Tattler) fullLatch(b int, e error) bool {
 			tp.latched = e
 
 			// Capture backtrace frames.
-			cf := callFrames
-			if cf > 0 {
-				pc := make([]uintptr, cf)
+			if callFrames > 0 {
+				pc := make([]uintptr, callFrames)
 				n := runtime.Callers(b+2, pc)
 				pc = pc[:n] // truncate invalid entries
 

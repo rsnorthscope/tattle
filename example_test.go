@@ -1,6 +1,9 @@
-package tattle
+// Copyright 2019-2024 Richard Northscope.  All rights reserved.
+// Use of this source code is governed by the
+// MIT license that can be found in the LICENSE file.package tattle
+// type tattler tattle.Tattler already appears
 
-// type tattler tattle.Tattler already appears package
+package tattle
 
 type Record struct {
 	ID   int

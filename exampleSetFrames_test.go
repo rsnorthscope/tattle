@@ -1,3 +1,7 @@
+// Copyright 2024 Richard Northscope.  All rights reserved.
+// Use of this source code is governed by the
+// MIT license that can be found in the LICENSE file.
+
 package tattle
 
 // NOTE:
@@ -8,19 +12,15 @@ import (
 )
 
 func ExampleSetFrames() {
-	// This example is also the unit test for SetFrame.
 	// The backtrace would happily flow into the test infrastructure.
 	// The 2 function embedding is to ensure reproducibility.
 	func() {
 		func() {
-			def := SetFrames(-100)
-			fmt.Printf("SetFrame default: %d\n", def)
-			lowStop := SetFrames(100000)
-			fmt.Printf("SetFrame low stop: %d\n", lowStop)
-			hiStop := SetFrames(0)
-			fmt.Printf("SetFrame hi stop:  %d\n", hiStop)
+			tat := tattler{}
+			tat.Latchf("ERROR")
+			fmt.Printf("Example error, default trace back: %s", tat.String())
 
-			var tat = tattler{}
+			tat = tattler{}
 			SetFrames(0)
 			tat.Latchf("ERROR")
 			fmt.Printf("Example error, no trace back:%s", tat.String())
@@ -30,22 +30,15 @@ func ExampleSetFrames() {
 			tat.Latchf("ERROR")
 			fmt.Printf("Example error, 1 frame trace back: %s", tat.String())
 
-			tat = tattler{}
-			SetFrames(def)
-			tat.Latchf("ERROR")
-			fmt.Printf("Example error, default trace back: %s", tat.String())
-
+			SetFrames(3)
 		}()
 	}()
 	// Output:
-	// SetFrame default: 3
-	// SetFrame low stop: 0
-	// SetFrame hi stop:  100
+	// Example error, default trace back: ERROR
+	//  Latched at:  exampleSetFrames_test.go:20 in github.com/rsnorthscope/tattle.ExampleSetFrames.ExampleSetFrames.func1.func2
+	//  Called From: exampleSetFrames_test.go:34 in github.com/rsnorthscope/tattle.ExampleSetFrames.func1
+	//  Called From: exampleSetFrames_test.go:35 in github.com/rsnorthscope/tattle.ExampleSetFrames
 	// Example error, no trace back:ERROR
 	// Example error, 1 frame trace back: ERROR
 	//  Latched at:  exampleSetFrames_test.go:30 in github.com/rsnorthscope/tattle.ExampleSetFrames.ExampleSetFrames.func1.func2
-	// Example error, default trace back: ERROR
-	//  Latched at:  exampleSetFrames_test.go:35 in github.com/rsnorthscope/tattle.ExampleSetFrames.ExampleSetFrames.func1.func2
-	//  Called From: exampleSetFrames_test.go:38 in github.com/rsnorthscope/tattle.ExampleSetFrames.func1
-	//  Called From: exampleSetFrames_test.go:39 in github.com/rsnorthscope/tattle.ExampleSetFrames
 }
