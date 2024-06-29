@@ -1,7 +1,7 @@
+# High level summary
+
 Package tattle provides a simple facility to attach an error to the
 structure that caused it.
-
-# High level summary
 
 What tattle does could  be done using error values:
 
